@@ -2,8 +2,8 @@
   --bg: #09121c;
   --panel: #102336;
   --ink: #ecf7ff;
-  --light: #d6ecff;
-  --dark: #4a708f;
+  --light: #b9d8ee;
+  --dark: #376487;
   --select: #f9c74f;
   --target: #90be6d;
   --danger: #f94144;
@@ -66,6 +66,19 @@ h1 {
 
 .intensity-control input[type="range"] {
   width: 100%;
+  accent-color: #48b6ff;
+}
+
+.debug-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.86rem;
+  color: #d7eefe;
+  white-space: nowrap;
+}
+
+.debug-control input {
   accent-color: #48b6ff;
 }
 
@@ -153,14 +166,51 @@ button:hover {
 }
 
 .piece {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 82%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255 / 48%);
+  box-shadow:
+    0 3px 6px rgb(0 0 0 / 35%),
+    inset 0 1px 2px rgb(255 255 255 / 35%);
+  background: #2f3f4f;
+  color: #f3fbff;
   line-height: 1;
+  text-shadow:
+    0 1px 0 rgb(0 0 0 / 65%),
+    0 0 7px rgb(0 0 0 / 45%);
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / 28%));
   transform-origin: center;
+}
+
+.piece-white {
+  background:
+    radial-gradient(circle at 30% 25%, rgb(255 255 255 / 40%), transparent 46%),
+    linear-gradient(145deg, #ca2d2d, #8e1717 68%);
+  border-color: rgb(255 223 156 / 78%);
+}
+
+.piece-black {
+  background:
+    radial-gradient(circle at 30% 25%, rgb(255 255 255 / 30%), transparent 44%),
+    linear-gradient(145deg, #1f7a4e, #125638 68%);
+  border-color: rgb(182 226 255 / 72%);
 }
 
 .fx-layer {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+}
+
+.fx-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
 }
 
@@ -244,14 +294,15 @@ button:hover {
 @keyframes stickSlide {
   0% {
     opacity: 0;
-    transform: translate(var(--sx), var(--sy)) rotate(var(--r1));
+    transform: translate(var(--tx), var(--ty)) rotate(var(--rTouch));
   }
-  16% {
+  8% {
     opacity: 1;
+    transform: translate(var(--tx), var(--ty)) rotate(var(--rTouch));
   }
-  34% {
+  24% {
     opacity: 1;
-    transform: translate(var(--bx), var(--by)) rotate(var(--rBack));
+    transform: translate(var(--tx), var(--ty)) rotate(var(--rTouch));
   }
   50% {
     opacity: 1;

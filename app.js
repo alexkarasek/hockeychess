@@ -11,12 +11,14 @@ const resetBtn = document.getElementById("resetBtn");
 const fxLayer = document.getElementById("fxLayer");
 const intensityRangeEl = document.getElementById("intensityRange");
 const intensityValueEl = document.getElementById("intensityValue");
+const debugOverlayEl = document.getElementById("debugOverlay");
 
 let game = createInitialGame();
 let selected = null;
 let legalTargets = [];
 let isAnimating = false;
 let cinematicIntensity = 1;
+let debugOverlay = false;
 
 function setCinematicIntensity(rawValue) {
   const value = Math.max(50, Math.min(180, Number(rawValue) || 100));
@@ -83,7 +85,7 @@ function drawBoard() {
       const piece = game.board[r][c];
       if (piece) {
         const pieceEl = document.createElement("span");
-        pieceEl.className = "piece";
+        pieceEl.className = `piece ${piece.color === "w" ? "piece-white" : "piece-black"}`;
         pieceEl.textContent = PIECE_GLYPHS[piece.color][piece.type];
         sq.appendChild(pieceEl);
       }
@@ -135,16 +137,19 @@ async function playMove(move) {
   if (isAnimating) return;
   isAnimating = true;
 
-  const fromRect = squareRect(move.from.r, move.from.c);
-  const toRect = squareRect(move.to.r, move.to.c);
-  await animateShot(fromRect, toRect, move);
+  try {
+    const fromRect = squareRect(move.from.r, move.from.c);
+    const toRect = squareRect(move.to.r, move.to.c);
+    await animateShot(fromRect, toRect, move);
 
-  game = applyMove(game, move);
-  selected = null;
-  legalTargets = [];
-  recalcStatus();
-  drawBoard();
-  isAnimating = false;
+    game = applyMove(game, move);
+    selected = null;
+    legalTargets = [];
+    recalcStatus();
+    drawBoard();
+  } finally {
+    isAnimating = false;
+  }
 }
 
 function squareRect(r, c) {
@@ -159,6 +164,114 @@ function squareRect(r, c) {
   };
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2;
+}
+
+function easeOutCubic(t) {
+  return 1 - (1 - t) ** 3;
+}
+
+function easeInCubic(t) {
+  return t ** 3;
+}
+
+function drawHockeyStick(ctx, shot) {
+  const length = shot === "slap" ? 256 : 238;
+  const shaftStart = 34;
+  const shaftEnd = length - 60;
+  const heelX = length - 58;
+  const bladeY = 12;
+  const bladeH = 18;
+  const toeX = length + 6;
+
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#151f27";
+  ctx.lineWidth = 4.6;
+
+  ctx.fillStyle = "#0e141a";
+  ctx.beginPath();
+  ctx.roundRect(-6, -9, 16, 18, 9);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#1a232c";
+  ctx.beginPath();
+  ctx.roundRect(8, -10, 40, 20, 10);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#e9f0f4";
+  for (let x = 11; x < 46; x += 5) {
+    ctx.fillRect(x, -8, 2, 16);
+  }
+
+  const shaftGrad = ctx.createLinearGradient(shaftStart, -4, shaftEnd, 4);
+  shaftGrad.addColorStop(0, "#8cc7ff");
+  shaftGrad.addColorStop(0.45, "#4b8fc8");
+  shaftGrad.addColorStop(1, "#2b5f93");
+  ctx.fillStyle = shaftGrad;
+  ctx.beginPath();
+  ctx.roundRect(shaftStart, -5, shaftEnd - shaftStart, 10, 5);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "rgb(255 255 255 / 55%)";
+  ctx.fillRect(shaftStart + 20, -3, shaftEnd - shaftStart - 34, 1.9);
+
+  ctx.fillStyle = "#37638b";
+  ctx.beginPath();
+  ctx.moveTo(shaftEnd - 2, -5);
+  ctx.lineTo(heelX - 5, 2);
+  ctx.lineTo(heelX + 4, bladeY + 1);
+  ctx.lineTo(heelX + 8, bladeY - 2);
+  ctx.lineTo(shaftEnd + 3, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#202e3a";
+  ctx.beginPath();
+  ctx.moveTo(heelX, bladeY);
+  ctx.lineTo(toeX - 14, bladeY);
+  ctx.quadraticCurveTo(toeX + 2, bladeY + 1, toeX + 3, bladeY + 12);
+  ctx.lineTo(toeX + 3, bladeY + bladeH - 1);
+  ctx.quadraticCurveTo(toeX + 1, bladeY + bladeH + 6, toeX - 8, bladeY + bladeH + 7);
+  ctx.lineTo(heelX + 2, bladeY + bladeH + 7);
+  ctx.quadraticCurveTo(heelX - 2, bladeY + bladeH + 6, heelX - 2, bladeY + bladeH + 2);
+  ctx.lineTo(heelX - 2, bladeY + 3);
+  ctx.quadraticCurveTo(heelX - 1, bladeY, heelX, bladeY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "rgb(248 252 255 / 88%)";
+  for (let y = bladeY + 3; y <= bladeY + bladeH + 4; y += 4) {
+    ctx.fillRect(heelX + 2, y, toeX - heelX - 9, 1.7);
+  }
+
+  ctx.fillStyle = "rgb(255 255 255 / 30%)";
+  ctx.fillRect(heelX + 6, bladeY + 2, 22, 1.5);
+  ctx.fillRect(toeX - 30, bladeY + 2.2, 10, 1.2);
+
+  ctx.fillStyle = "rgb(0 0 0 / 24%)";
+  ctx.beginPath();
+  ctx.ellipse(toeX - 4, bladeY + bladeH + 9, 10, 2.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
 function animateShot(fromRect, toRect, move) {
   const shot = move.shot;
   const arenaRect = boardEl.getBoundingClientRect();
@@ -166,227 +279,300 @@ function animateShot(fromRect, toRect, move) {
   const y1 = fromRect.cy - arenaRect.top;
   const x2 = toRect.cx - arenaRect.left;
   const y2 = toRect.cy - arenaRect.top;
-
   const angle = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
   const dist = Math.hypot(x2 - x1, y2 - y1);
-
-  const stick = document.createElement("div");
-  stick.className = `stick ${shot}`;
-  stick.innerHTML = `
-    <svg class="stick-svg" viewBox="0 0 260 72" role="presentation" aria-hidden="true">
-      <defs>
-        <linearGradient id="shaftWood" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#f0dcba"></stop>
-          <stop offset="38%" stop-color="#d9ba8c"></stop>
-          <stop offset="100%" stop-color="#b38757"></stop>
-        </linearGradient>
-      </defs>
-      <rect x="20" y="22" width="36" height="20" rx="10" fill="#111518"></rect>
-      <g fill="#d9dde0">
-        <rect x="22" y="24" width="2" height="16" rx="1"></rect>
-        <rect x="27" y="24" width="2" height="16" rx="1"></rect>
-        <rect x="32" y="24" width="2" height="16" rx="1"></rect>
-        <rect x="37" y="24" width="2" height="16" rx="1"></rect>
-        <rect x="42" y="24" width="2" height="16" rx="1"></rect>
-        <rect x="47" y="24" width="2" height="16" rx="1"></rect>
-      </g>
-      <rect x="50" y="26" width="156" height="12" rx="6" fill="url(#shaftWood)" stroke="#765230" stroke-width="1.2"></rect>
-      <rect x="120" y="27" width="68" height="2.4" rx="1" fill="rgb(255 255 255 / 60%)"></rect>
-      <path d="M205 27 L241 27 C249 27 252 32 252 40 L252 56 C252 62 248 66 242 66 L206 66 C198 66 194 61 194 53 L194 40 C194 33 198 29 205 27 Z" fill="#0c1013" stroke="#44515a" stroke-width="1.1"></path>
-      <g fill="rgb(232 241 247 / 86%)">
-        <rect x="205" y="30" width="28" height="2"></rect>
-        <rect x="205" y="35" width="34" height="2"></rect>
-        <rect x="205" y="40" width="38" height="2"></rect>
-        <rect x="205" y="45" width="41" height="2"></rect>
-        <rect x="205" y="50" width="43" height="2"></rect>
-      </g>
-      <path d="M241 44 L255 44 L255 64 C255 69 251 71 247 71 L236 71 Z" fill="#07090b"></path>
-      <circle cx="18" cy="32" r="7" fill="#0b0f12"></circle>
-      <circle cx="16" cy="30" r="2" fill="#45545f"></circle>
-    </svg>
-  `;
   const variants = {
     wrist: {
-      duration: 1220,
-      arc: 13,
-      delay: 380,
-      linger: 980,
-      pieceFlight: 780,
-      backSwing: 58,
-      snapSwing: 48,
-      followSwing: 24,
-      backDistance: 20,
-      contactDistance: 0,
-      holdDistance: 12,
-      followDistance: 22,
-    },
-    slap: {
-      duration: 1420,
-      arc: 24,
-      delay: 460,
-      linger: 1120,
-      pieceFlight: 860,
-      backSwing: 92,
-      snapSwing: 82,
-      followSwing: 38,
-      backDistance: 30,
-      contactDistance: 0,
-      holdDistance: 20,
-      followDistance: 30,
-    },
-    backhand: {
-      duration: 1300,
-      arc: -20,
-      delay: 420,
-      linger: 1020,
-      pieceFlight: 820,
-      backSwing: 74,
-      snapSwing: 66,
+      duration: 1500,
+      linger: 950,
+      backSwing: 72,
+      snapSwing: 58,
       followSwing: 30,
-      backDistance: 24,
-      contactDistance: 0,
+      backDistance: 56,
       holdDistance: 16,
       followDistance: 26,
+      arcLift: 26,
+      pieceFlight: 820,
+    },
+    slap: {
+      duration: 1720,
+      linger: 1180,
+      backSwing: 116,
+      snapSwing: 94,
+      followSwing: 42,
+      backDistance: 82,
+      holdDistance: 24,
+      followDistance: 34,
+      arcLift: 38,
+      pieceFlight: 920,
+    },
+    backhand: {
+      duration: 1600,
+      linger: 1040,
+      backSwing: -94,
+      snapSwing: -76,
+      followSwing: -34,
+      backDistance: 70,
+      holdDistance: 20,
+      followDistance: 30,
+      arcLift: 30,
+      pieceFlight: 860,
     },
   };
   const style = variants[shot] || variants.wrist;
-  const swingMult = 0.55 + 0.45 * cinematicIntensity;
-  const travelMult = 0.65 + 0.35 * cinematicIntensity;
-  const timeMult = 0.7 + 0.3 * cinematicIntensity;
-  const lingerMult = 0.75 + 0.4 * cinematicIntensity;
+  const swingMult = 0.6 + 0.65 * cinematicIntensity;
+  const travelMult = 0.7 + 0.55 * cinematicIntensity;
+  const timeMult = 0.72 + 0.4 * cinematicIntensity;
+  const lingerMult = 0.75 + 0.45 * cinematicIntensity;
   const tuned = {
     ...style,
     duration: Math.round(style.duration * timeMult),
-    delay: Math.round(style.delay * timeMult),
     linger: Math.round(style.linger * lingerMult),
     pieceFlight: Math.round(style.pieceFlight * timeMult),
     backSwing: style.backSwing * swingMult,
     snapSwing: style.snapSwing * swingMult,
     followSwing: style.followSwing * swingMult,
     backDistance: style.backDistance * travelMult,
-    contactDistance: style.contactDistance * travelMult,
     holdDistance: style.holdDistance * travelMult,
     followDistance: style.followDistance * travelMult,
+    arcLift: style.arcLift * travelMult,
   };
-  const stickWidth = shot === "slap" ? 250 : 228;
-  const stickHeight = 74;
-  const handleOriginX = stickWidth * (20 / 260);
-  const handleOriginY = stickHeight * (32 / 72);
-  const bladeTipX = stickWidth * (252 / 260);
-  const bladeTipY = stickHeight * (56 / 72);
+  const totalMs = tuned.duration + tuned.linger;
+  const strikeT = 0.62;
+  const pieceLift = Math.min(24, 10 + dist * 0.09);
 
   const ux = dist > 0 ? (x2 - x1) / dist : 1;
   const uy = dist > 0 ? (y2 - y1) / dist : 0;
-  const slideIn = Math.min(90, 30 + dist * 0.34);
-  const holdShift = Math.min(tuned.holdDistance, 8 + dist * 0.06);
-  const followThrough = Math.min(tuned.followDistance, 12 + dist * 0.08);
-  const sign = tuned.arc >= 0 ? 1 : -1;
-
-  const r1 = angle - tuned.arc - 12;
-  const rBack = angle - sign * tuned.backSwing;
-  const rSnap = angle + sign * tuned.snapSwing;
-  const rFollow = angle + sign * tuned.followSwing;
-  const r3 = angle - (tuned.arc > 0 ? 6 : -6);
-
-  const bladeVectorX = bladeTipX - handleOriginX;
-  const bladeVectorY = bladeTipY - handleOriginY;
-  const placeStickForBlade = (bladeX, bladeY, rotDeg) => {
-    const theta = (rotDeg * Math.PI) / 180;
-    const cosT = Math.cos(theta);
-    const sinT = Math.sin(theta);
-    const rotatedBladeX = bladeVectorX * cosT - bladeVectorY * sinT;
-    const rotatedBladeY = bladeVectorX * sinT + bladeVectorY * cosT;
-    return {
-      x: bladeX - handleOriginX - rotatedBladeX,
-      y: bladeY - handleOriginY - rotatedBladeY,
-    };
+  const px = -uy;
+  const py = ux;
+  const colorSign = move.piece.color === "w" ? -1 : 1;
+  const baseSign = (shot === "backhand" ? -1 : 1) * colorSign;
+  const contactOffset = fromRect.size * 0.28 + (shot === "slap" ? 2 : 0);
+  const bladeTouch = {
+    x: x1 - ux * contactOffset,
+    y: y1 - uy * contactOffset,
   };
 
-  const startPos = placeStickForBlade(x1 - ux * slideIn, y1 - uy * slideIn, r1);
-  const backPos = placeStickForBlade(x1 - ux * tuned.backDistance, y1 - uy * tuned.backDistance, rBack);
-  const contactPos = placeStickForBlade(
-    x1 + ux * tuned.contactDistance,
-    y1 + uy * tuned.contactDistance,
-    rSnap,
-  );
-  const holdPos = placeStickForBlade(x1 + ux * holdShift, y1 + uy * holdShift, rFollow);
-  const endPos = placeStickForBlade(x1 + ux * followThrough, y1 + uy * followThrough, r3);
+  const localBlade = { x: shot === "slap" ? 224 : 208, y: 22 };
+  const localHandle = { x: 0, y: 0 };
 
-  stick.style.left = "0px";
-  stick.style.top = "0px";
-  stick.style.width = `${stickWidth}px`;
-  stick.style.height = `${stickHeight}px`;
-  stick.style.setProperty("--ox", `${handleOriginX}px`);
-  stick.style.setProperty("--oy", `${handleOriginY}px`);
-  stick.style.setProperty("--duration", `${tuned.duration}ms`);
-  stick.style.setProperty("--sx", `${startPos.x}px`);
-  stick.style.setProperty("--sy", `${startPos.y}px`);
-  stick.style.setProperty("--bx", `${backPos.x}px`);
-  stick.style.setProperty("--by", `${backPos.y}px`);
-  stick.style.setProperty("--cx", `${contactPos.x}px`);
-  stick.style.setProperty("--cy", `${contactPos.y}px`);
-  stick.style.setProperty("--hx", `${holdPos.x}px`);
-  stick.style.setProperty("--hy", `${holdPos.y}px`);
-  stick.style.setProperty("--ex", `${endPos.x}px`);
-  stick.style.setProperty("--ey", `${endPos.y}px`);
-  stick.style.setProperty("--r1", `${r1}deg`);
-  stick.style.setProperty("--rBack", `${rBack}deg`);
-  stick.style.setProperty("--rSnap", `${rSnap}deg`);
-  stick.style.setProperty("--rFollow", `${rFollow}deg`);
-  stick.style.setProperty("--r3", `${r3}deg`);
+  function bladeForHandle(handlePos, angleDeg) {
+    const rad = (angleDeg * Math.PI) / 180;
+    const cosA = Math.cos(rad);
+    const sinA = Math.sin(rad);
+    const rx = (localBlade.x - localHandle.x) * cosA - (localBlade.y - localHandle.y) * sinA;
+    const ry = (localBlade.x - localHandle.x) * sinA + (localBlade.y - localHandle.y) * cosA;
+    return { x: handlePos.x + rx, y: handlePos.y + ry };
+  }
 
-  const trail = document.createElement("div");
-  trail.className = "puck-trail";
-  trail.style.left = `${x1 + ux * 2}px`;
-  trail.style.top = `${y1 + uy * 2 - 4}px`;
-  trail.style.width = `${Math.max(18, dist - 2)}px`;
-  trail.style.transform = `rotate(${angle}deg)`;
-  trail.style.animation = `sweep ${tuned.duration + 320}ms ease-out ${tuned.delay}ms forwards`;
+  const bladeLocalAngle = (Math.atan2(localBlade.y - localHandle.y, localBlade.x - localHandle.x) * 180) / Math.PI;
+  const stickLength = Math.hypot(localBlade.x - localHandle.x, localBlade.y - localHandle.y);
+  const handlePivot = {
+    x: bladeTouch.x + px * stickLength * baseSign,
+    y: bladeTouch.y + py * stickLength * baseSign,
+  };
+  const angleToTouch = (Math.atan2(bladeTouch.y - handlePivot.y, bladeTouch.x - handlePivot.x) * 180) / Math.PI;
+  const angleTouch = angleToTouch - bladeLocalAngle;
+  const strikeTarget = { x: x1 + ux * 2, y: y1 + uy * 2 };
+  const angleToStrike = (Math.atan2(strikeTarget.y - handlePivot.y, strikeTarget.x - handlePivot.x) * 180) / Math.PI;
+  const angleStrike = angleToStrike - bladeLocalAngle;
 
-  const impact = document.createElement("div");
-  impact.className = "impact-ring";
-  impact.style.left = `${x1 - 12}px`;
-  impact.style.top = `${y1 - 12}px`;
-  impact.style.animationDelay = `${tuned.delay + 120}ms`;
+  const projectionFromTouch = (angleDeg) => {
+    const p = bladeForHandle(handlePivot, angleDeg);
+    return (p.x - bladeTouch.x) * ux + (p.y - bladeTouch.y) * uy;
+  };
+  const backOptionA = angleTouch + Math.abs(tuned.backSwing);
+  const backOptionB = angleTouch - Math.abs(tuned.backSwing);
+  const projA = projectionFromTouch(backOptionA);
+  const projB = projectionFromTouch(backOptionB);
+  const angleBack = projA < projB ? backOptionA : backOptionB;
+
+  const angleDelta = (from, to) => ((to - from + 540) % 360) - 180;
+  const swingDir = Math.sign(angleDelta(angleBack, angleStrike)) || baseSign;
+  const angleFollow = angleStrike + swingDir * Math.abs(tuned.followSwing);
+  const angleEnd = angleStrike + swingDir * Math.abs(tuned.followSwing) * 0.45;
+  const bladeBackPos = bladeForHandle(handlePivot, angleBack);
+  const bladeStrikePos = bladeForHandle(handlePivot, angleStrike);
+  const bladeFollowPos = bladeForHandle(handlePivot, angleFollow);
 
   const bars = document.createElement("div");
   bars.className = "cutscene-bars";
-  bars.style.setProperty("--bars-duration", `${tuned.duration + tuned.linger}ms`);
+  bars.style.setProperty("--bars-duration", `${totalMs}ms`);
 
   const glare = document.createElement("div");
   glare.className = "cutscene-glare";
-  glare.style.setProperty("--glare-duration", `${tuned.duration + tuned.linger}ms`);
+  glare.style.setProperty("--glare-duration", `${totalMs}ms`);
 
-  const flyingPiece = document.createElement("div");
-  flyingPiece.className = "flying-piece";
-  flyingPiece.textContent = PIECE_GLYPHS[move.piece.color][move.piece.type];
-  flyingPiece.style.left = `${x1}px`;
-  flyingPiece.style.top = `${y1}px`;
-  flyingPiece.style.setProperty("--dx", `${x2 - x1}px`);
-  flyingPiece.style.setProperty("--dy", `${y2 - y1}px`);
-  flyingPiece.style.setProperty("--lift", `${Math.min(20, 8 + dist * 0.08)}px`);
-  flyingPiece.style.setProperty("--spin", `${Math.max(16, Math.min(40, dist * 0.2))}deg`);
-  flyingPiece.style.animation = `pieceFlight ${tuned.pieceFlight}ms cubic-bezier(0.18, 0.85, 0.24, 1) ${tuned.delay + 140}ms forwards`;
+  const canvas = document.createElement("canvas");
+  canvas.className = "fx-canvas";
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(arenaRect.width * dpr);
+  canvas.height = Math.floor(arenaRect.height * dpr);
+  canvas.style.width = `${arenaRect.width}px`;
+  canvas.style.height = `${arenaRect.height}px`;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
 
   boardEl.classList.add("cutscene-pulse");
   fxLayer.appendChild(bars);
   fxLayer.appendChild(glare);
-  fxLayer.appendChild(stick);
-  fxLayer.appendChild(trail);
-  fxLayer.appendChild(impact);
-  fxLayer.appendChild(flyingPiece);
+  fxLayer.appendChild(canvas);
 
   return new Promise((resolve) => {
-    window.setTimeout(() => {
+    const start = performance.now();
+    let settled = false;
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
       boardEl.classList.remove("cutscene-pulse");
+      canvas.remove();
       bars.remove();
       glare.remove();
-      stick.remove();
-      trail.remove();
-      impact.remove();
-      flyingPiece.remove();
       resolve();
-    }, tuned.duration + tuned.delay + tuned.linger);
+    };
+
+    const render = (now) => {
+      try {
+        const elapsed = now - start;
+        const t = clamp(elapsed / totalMs, 0, 1);
+        ctx.clearRect(0, 0, arenaRect.width, arenaRect.height);
+
+        let bladePos;
+        let stickAngle;
+        if (t < 0.2) {
+          stickAngle = angleTouch;
+        } else if (t < 0.48) {
+          const q = easeInOutCubic((t - 0.2) / 0.28);
+          stickAngle = lerp(angleTouch, angleBack, q);
+        } else if (t < strikeT) {
+          const q = easeInCubic((t - 0.48) / (strikeT - 0.48));
+          stickAngle = lerp(angleBack, angleStrike, q);
+        } else if (t < 0.84) {
+          const q = easeOutCubic((t - strikeT) / (0.84 - strikeT));
+          stickAngle = lerp(angleStrike, angleFollow, q);
+        } else {
+          const q = easeOutCubic((t - 0.84) / 0.16);
+          stickAngle = lerp(angleFollow, angleEnd, q);
+        }
+
+        const handlePos = handlePivot;
+        bladePos = bladeForHandle(handlePos, stickAngle);
+        const angleRad = (stickAngle * Math.PI) / 180;
+
+        if (debugOverlay) {
+          ctx.save();
+          ctx.lineWidth = 1.8;
+
+        ctx.strokeStyle = "rgba(250, 224, 68, 0.9)";
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(255, 140, 90, 0.85)";
+        ctx.beginPath();
+        ctx.moveTo(bladeTouch.x - px * 120, bladeTouch.y - py * 120);
+        ctx.lineTo(bladeTouch.x + px * 120, bladeTouch.y + py * 120);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(120, 220, 255, 0.85)";
+        ctx.beginPath();
+        for (let i = 0; i <= 32; i += 1) {
+          const ta = i / 32;
+          const a = lerp(angleBack, angleStrike, ta);
+          const p = bladeForHandle(handlePivot, a);
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+
+        const markers = [
+          { p: bladeTouch, color: "#ffffff", label: "touch" },
+          { p: bladeBackPos, color: "#ff7f7f", label: "back" },
+          { p: bladeStrikePos, color: "#8eff8e", label: "strike" },
+          { p: bladeFollowPos, color: "#8ecbff", label: "follow" },
+          { p: handlePivot, color: "#ffbe55", label: "pivot" },
+        ];
+
+        for (const m of markers) {
+          ctx.fillStyle = m.color;
+          ctx.beginPath();
+          ctx.arc(m.p.x, m.p.y, m.label === "pivot" ? 5 : 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = "rgba(8, 16, 24, 0.88)";
+        ctx.fillRect(12, 12, 252, 82);
+        ctx.fillStyle = "#d8f3ff";
+        ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.fillText(`proj touch->back: ${(((bladeBackPos.x - bladeTouch.x) * ux + (bladeBackPos.y - bladeTouch.y) * uy)).toFixed(1)}`, 18, 32);
+        ctx.fillText(`proj back->strike: ${(((bladeStrikePos.x - bladeBackPos.x) * ux + (bladeStrikePos.y - bladeBackPos.y) * uy)).toFixed(1)}`, 18, 50);
+        ctx.fillText(`angles t/b/s: ${angleTouch.toFixed(1)} / ${angleBack.toFixed(1)} / ${angleStrike.toFixed(1)}`, 18, 68);
+        ctx.fillText(`swingDir: ${swingDir > 0 ? "+1" : "-1"}`, 18, 86);
+          ctx.restore();
+        }
+
+        if (t >= strikeT) {
+          const q = easeOutCubic((t - strikeT) / (1 - strikeT));
+          const pieceX = lerp(x1, x2, q);
+          const pieceY = lerp(y1, y2, q) - Math.sin(Math.PI * q) * pieceLift;
+          const spin = lerp(0, swingDir * 34, q);
+          ctx.save();
+          ctx.translate(pieceX, pieceY);
+          ctx.rotate((spin * Math.PI) / 180);
+          ctx.font = "700 46px 'Segoe UI Symbol', 'Apple Color Emoji', serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+          ctx.shadowBlur = 10;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(PIECE_GLYPHS[move.piece.color][move.piece.type], 0, 0);
+          ctx.restore();
+
+          ctx.save();
+          const trailAlpha = clamp(1 - q * 1.1, 0, 0.9);
+          ctx.strokeStyle = `rgba(141, 226, 255, ${trailAlpha})`;
+          ctx.lineWidth = 8;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(pieceX, pieceY);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        const impactWindow = Math.abs(t - strikeT);
+        if (impactWindow < 0.06) {
+          const q = impactWindow / 0.06;
+          const ringR = 8 + q * 20;
+          const alpha = 0.9 - q * 0.9;
+          ctx.save();
+          ctx.strokeStyle = `rgba(231, 250, 255, ${alpha})`;
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.arc(x1, y1, ringR, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        ctx.save();
+        ctx.translate(handlePos.x, handlePos.y);
+        ctx.rotate(angleRad);
+        drawHockeyStick(ctx, shot);
+        ctx.restore();
+
+        if (t < 1) {
+          requestAnimationFrame(render);
+        } else {
+          cleanup();
+        }
+      } catch (err) {
+        console.error(err);
+        cleanup();
+      }
+    };
+
+    requestAnimationFrame(render);
   });
 }
 
@@ -747,6 +933,12 @@ resetBtn.addEventListener("click", () => {
 if (intensityRangeEl) {
   intensityRangeEl.addEventListener("input", (event) => {
     setCinematicIntensity(event.target.value);
+  });
+}
+
+if (debugOverlayEl) {
+  debugOverlayEl.addEventListener("change", (event) => {
+    debugOverlay = Boolean(event.target.checked);
   });
 }
 
