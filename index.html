@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hockey Chess</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <h1>Hockey Chess</h1>
+        <div class="controls">
+          <label class="intensity-control" for="intensityRange">
+            <span>Cinematic Intensity <strong id="intensityValue">100%</strong></span>
+            <input id="intensityRange" type="range" min="50" max="180" value="100" step="5" />
+          </label>
+          <button id="resetBtn" type="button">New Game</button>
+        </div>
+      </header>
+
+      <section class="status-panel">
+        <p id="statusText">White to move</p>
+      </section>
+
+      <section class="arena">
+        <div id="board" class="board" aria-label="Chess board"></div>
+        <div id="fxLayer" class="fx-layer" aria-hidden="true"></div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
